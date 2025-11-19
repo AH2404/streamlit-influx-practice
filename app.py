@@ -1,81 +1,124 @@
 import streamlit as st
-import pandas as pd
 from influxdb_client import InfluxDBClient
+import pandas as pd
 import plotly.express as px
 
-# --- Configuración de conexión ---
+# ---------------------------------------------------------
+# CONFIGURACIÓN DE INFLUXDB
+# ---------------------------------------------------------
 INFLUXDB_URL = "https://us-east-1-1.aws.cloud2.influxdata.com"
-INFLUXDB_TOKEN = "JcKXoXE30JQvV9Ggb4-zv6sQc0Zh6B6Haz5eMRW0FrJEduG2KcFJN9-7RoYvVORcFgtrHR-Q_ly-52pD7IC6JQ=="
-INFLUXDB_ORG = "0925ccf91ab36478"
-INFLUXDB_BUCKET = "EXTREME_MANUFACTURING"
+INFLUXDB_TOKEN = st.secrets["INFLUXDB_TOKEN"]
+INFLUXDB_ORG = "studio70751a@gmail.com"
+INFLUXDB_BUCKET = "Studio"
 
-client = InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
-query_api = client.query_api()
+# ---------------------------------------------------------
+# FUNCIÓN PARA CONSULTAR INFLUXDB
+# ---------------------------------------------------------
+def query_influx(query):
+    client = InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
+    tables = client.query_api().query(query)
 
-# --- Interfaz de usuario ---
-st.title("📊 Tablero de Digitalización de Planta")
-st.write("Visualización de datos desde InfluxDB en tiempo real.")
+    records = []
+    for table in tables:
+        for row in table.records:
+            records.append({
+                "_time": row.get_time(),
+                "_field": row.get_field(),
+                "_value": row.get_value()
+            })
+    return pd.DataFrame(records)
 
-sensor = st.selectbox("Selecciona el sensor:", ["DHT22", "MPU6050"])
-start = st.slider(
-    "Selecciona el rango de tiempo de inicio (start):",
-    min_value=1, max_value=15, value=15
-)
+# ---------------------------------------------------------
+# UI DE STREAMLIT
+# ---------------------------------------------------------
+st.title("Dashboard Sensores InfluxDB - Studio")
 
-stop = st.slider(
-    "Selecciona el rango de tiempo de finalización (stop):",
-    min_value=5, max_value=15, value=9
-)
+sensor = st.selectbox("Selecciona el sensor:", ["DHT22", "BH1750"])
+start = st.number_input("Días hacia atrás (inicio):", min_value=1, max_value=60, value=7)
+stop = st.number_input("Días hacia atrás (fin):", min_value=0, max_value=59, value=0)
 
-# --- Consulta dinámica ---
+# ---------------------------------------------------------
+# CONSULTA SEGÚN SENSOR
+# ---------------------------------------------------------
 if sensor == "DHT22":
-    query = f'''
+
+    # 🔍 PRIMERA CONSULTA: obtener TODOS LOS CAMPOS reales
+    st.subheader("Campos detectados en el sensor DHT22")
+
+    query_all = f'''
     from(bucket: "{INFLUXDB_BUCKET}")
         |> range(start: -{start}d, stop: -{stop}d)
         |> filter(fn: (r) => r._measurement == "studio-dht22")
-        |> filter(fn: (r) =>
-            r._field == "humedad" or 
-            r._field == "temperatura" or 
-            r._field == "co2"
-        )
     '''
-else:
-    query = f'''
+
+    df_all = query_influx(query_all)
+
+    if df_all.empty:
+        st.error("No hay datos del sensor DHT22 en el rango seleccionado.")
+        st.stop()
+
+    # Mostrar lista real de campos
+    fields = sorted(df_all["_field"].unique().tolist())
+    st.write("**Campos encontrados:**", fields)
+
+    # 🔎 Verificamos si existe CO₂ usando varios nombres comunes
+    co2_aliases = ["co2", "co2_ppm", "co2ppm", "co2_level", "co2_concentration"]
+    co2_field = next((f for f in co2_aliases if f in fields), None)
+
+    if co2_field:
+        st.success(f"Campo CO₂ detectado como: **{co2_field}**")
+    else:
+        st.warning("⚠ No se detectó ningún campo de CO₂ en este sensor.")
+
+    # ---------------------------------------------------------
+    # Consulta final (solo los campos existentes)
+    # ---------------------------------------------------------
+
+    allowed_fields = ["temperature", "humidity"]
+    if co2_field:
+        allowed_fields.append(co2_field)
+
+    query_fields = f'''
     from(bucket: "{INFLUXDB_BUCKET}")
         |> range(start: -{start}d, stop: -{stop}d)
-        |> filter(fn: (r) => r._measurement == "mpu6050")
-        |> filter(fn: (r) =>
-            r._field == "accel_x" or r._field == "accel_y" or r._field == "accel_z" or
-            r._field == "gyro_x" or r._field == "gyro_y" or r._field == "gyro_z" or
-            r._field == "temperature")
+        |> filter(fn: (r) => r._measurement == "studio-dht22")
+        |> filter(fn: (r) => contains(value: r._field, set: {allowed_fields}))
     '''
 
-# --- Cargar datos ---
-try:
-    df = query_api.query_data_frame(org=INFLUXDB_ORG, query=query)
-    if isinstance(df, list):
-        df = pd.concat(df)
-except Exception as e:
-    st.error(f"Error al cargar datos: {e}")
+    df = query_influx(query_fields)
+
+elif sensor == "BH1750":
+    st.subheader("Campos detectados en el sensor BH1750")
+
+    query_bh = f'''
+    from(bucket: "{INFLUXDB_BUCKET}")
+        |> range(start: -{start}d, stop: -{stop}d)
+        |> filter(fn: (r) => r._measurement == "studio-bh1750")
+    '''
+
+    df = query_influx(query_bh)
+
+else:
     st.stop()
 
-# --- Limpieza de datos ---
+# ---------------------------------------------------------
+# PROCESAR DATOS
+# ---------------------------------------------------------
 if df.empty:
-    st.warning("⚠️ No se encontraron datos para el rango seleccionado.")
+    st.error("No se encontraron datos en este rango.")
     st.stop()
 
-df = df[["_time", "_field", "_value"]]
-df = df.rename(columns={"_time": "Tiempo", "_field": "Variable", "_value": "Valor"})
-df["Tiempo"] = pd.to_datetime(df["Tiempo"])
+# Convertir a formato tabla pivoteada
+df_pivot = df.pivot(index="_time", columns="_field", values="_value")
 
-# --- Gráficos ---
-st.subheader("📈 Visualización de variables")
+st.subheader("Tabla de datos")
+st.dataframe(df_pivot)
 
-for var in df["Variable"].unique():
-    sub_df = df[df["Variable"] == var]
-    fig = px.line(sub_df, x="Tiempo", y="Valor", title=f"{var}", template="plotly_white")
+# ---------------------------------------------------------
+# GRAFICAR
+# ---------------------------------------------------------
+st.subheader("Gráficas")
+
+for col in df_pivot.columns:
+    fig = px.line(df_pivot, x=df_pivot.index, y=col, title=f"{col}")
     st.plotly_chart(fig, use_container_width=True)
-
-st.dataframe(df.describe())
-st.dataframe(df.describe())
-
