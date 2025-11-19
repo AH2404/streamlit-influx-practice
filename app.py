@@ -33,7 +33,11 @@ if sensor == "DHT22":
     from(bucket: "{INFLUXDB_BUCKET}")
         |> range(start: -{start}d, stop: -{stop}d)
         |> filter(fn: (r) => r._measurement == "studio-dht22")
-        |> filter(fn: (r) => r._field == "humedad" or r._field == "temperatura" or r._field == "sensacion_termica")
+        |> filter(fn: (r) =>
+            r._field == "humedad" or 
+            r._field == "temperatura" or 
+            r._field == "co2"
+        )
     '''
 else:
     query = f'''
@@ -72,5 +76,6 @@ for var in df["Variable"].unique():
     fig = px.line(sub_df, x="Tiempo", y="Valor", title=f"{var}", template="plotly_white")
     st.plotly_chart(fig, use_container_width=True)
 
+st.dataframe(df.describe())
 st.dataframe(df.describe())
 
