@@ -1,14 +1,3 @@
-influxdb-client
-pandas
-streamlit
-matplotlib
-plotly
-scikit-learn
-import streamlit as st
-import pandas as pd
-from influxdb_client import InfluxDBClient
-import plotly.express as px
-
 # --- Configuración de conexión ---
 INFLUXDB_URL = "https://us-east-1-1.aws.cloud2.influxdata.com"
 INFLUXDB_TOKEN = "JcKXoXE30JQvV9Ggb4-zv6sQc0Zh6B6Haz5eMRW0FrJEduG2KcFJN9-7RoYvVORcFgtrHR-Q_ly-52pD7IC6JQ=="
