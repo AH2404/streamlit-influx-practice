@@ -1,6 +1,6 @@
 import streamlit as st
-from influxdb_client import InfluxDBClient
 import pandas as pd
+from influxdb_client import InfluxDBClient
 import plotly.express as px
 
 # --- Configuración de conexión ---
@@ -17,7 +17,6 @@ st.title("📊 Tablero de Digitalización de Planta")
 st.write("Visualización de datos desde InfluxDB en tiempo real.")
 
 sensor = st.selectbox("Selecciona el sensor:", ["DHT22", "MPU6050"])
-
 start = st.slider(
     "Selecciona el rango de tiempo de inicio (start):",
     min_value=1, max_value=15, value=15
@@ -34,11 +33,7 @@ if sensor == "DHT22":
     from(bucket: "{INFLUXDB_BUCKET}")
         |> range(start: -{start}d, stop: -{stop}d)
         |> filter(fn: (r) => r._measurement == "studio-dht22")
-        |> filter(fn: (r) => 
-            r._field == "humedad" or 
-            r._field == "temperatura" or 
-            r._field == "sensacion_termica"
-        )
+        |> filter(fn: (r) => r._field == "humedad" or r._field == "temperatura" or r._field == "sensacion_termica")
     '''
 else:
     query = f'''
@@ -48,8 +43,7 @@ else:
         |> filter(fn: (r) =>
             r._field == "accel_x" or r._field == "accel_y" or r._field == "accel_z" or
             r._field == "gyro_x" or r._field == "gyro_y" or r._field == "gyro_z" or
-            r._field == "temperature"
-        )
+            r._field == "temperature")
     '''
 
 # --- Cargar datos ---
