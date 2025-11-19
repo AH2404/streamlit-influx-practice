@@ -33,7 +33,7 @@ if sensor == "DHT22":
     from(bucket: "{INFLUXDB_BUCKET}")
         |> range(start: -{start}d, stop: -{stop}d)
         |> filter(fn: (r) => r._measurement == "studio-dht22")
-        |> filter(fn: (r) => r._field == "humedad" or r._field == "temperatura" or r._field == "sensacion_termica")
+        |> filter(fn: (r) => r._field == "humedad" or r._field == "temperatura" or r._field == "Concentración_C02")
     '''
 else:
     query = f'''
