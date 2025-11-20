@@ -73,7 +73,3 @@ for var in df["Variable"].unique():
     st.plotly_chart(fig, use_container_width=True)
 
 st.dataframe(df.describe())
-
-for col in df_pivot.columns:
-    fig = px.line(df_pivot, x=df_pivot.index, y=col, title=f"{col}")
-    st.plotly_chart(fig, use_container_width=True)
